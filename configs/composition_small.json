@@ -1,0 +1,10 @@
+{
+  "base": {"partitioned": true, "audit_coalitions": true},
+  "axes": {
+    "relays": [0, 2],
+    "provenance_retention": [0.0, 0.5, 1.0],
+    "authorization": ["local", "declared", "lineage"],
+    "control": ["intact", "remove_retriever", "remove_transform", "remove_publisher", "cut_handoff", "sanitize"]
+  },
+  "seeds": [0, 1, 2, 3, 4, 5, 6, 7]
+}

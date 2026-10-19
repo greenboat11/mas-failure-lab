@@ -1,0 +1,102 @@
+{
+  "version": "0.1.0",
+  "python": "3.14.3 (tags/v3.14.3:323c59a, Feb  3 2026, 16:04:56) [MSC v.1944 64 bit (AMD64)]",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "git_revision": null,
+  "git_dirty": null,
+  "source_sha256": {
+    "mas_failure_lab/__init__.py": "607b0b4d750163a751883be0b06897d3297409ad6a1c980e41eeeda597ceaea1",
+    "mas_failure_lab/__main__.py": "f91c4ca53a88e177f0e28034eb6c73d1dfb73729b3605f9883b193e223e3732d",
+    "mas_failure_lab/agents.py": "ab338fc027a54b37f6b01d4168df074082c8e0aa361ae2f0ecf8cf1b2290b98a",
+    "mas_failure_lab/experiment.py": "e641c3b977978cfd5ce1fa0cd34fafcee89582f7207f420b0d7767e58edadd8a",
+    "mas_failure_lab/llm_pilot.py": "affd386020c04502fafa5249ef9aeb4446a3178695ea91c7d9250adced6d1c1e",
+    "mas_failure_lab/model.py": "d35a6a95ff200d89ad53c4951acf3077309602908ea145a899425e9fe6970a9b",
+    "mas_failure_lab/providers.py": "cdebf3b982e846077612a27b4e464a689bc140598093592a59741efeb7c456fc",
+    "tests/test_model.py": "73c8a171b700a3f05c4828a8c991a4fbfb4db3e4ca089afe40c82fb43588526f",
+    "tests/test_provider.py": "f60951f7bc8e1071927cbd09cd2615458a0b909cdc032b8d15f0d3982a53f18f",
+    "configs/llm_smoke.json": "77fd4b9390f6a3978f1d4d4b139c92ad1e473ab743c175fcf73e76f1e1e6addf",
+    "configs/scaling.json": "4557aca87df182428f248fba29dca0fa3cd8dfb2d0847188576488db698c3946",
+    "configs/small.json": "a3c955ea867033213673b04c809ddf8104a8ba2de9561c3a665b98296ace00f0"
+  },
+  "random_scheme": "sha256-keyed-v1",
+  "bootstrap_repetitions": 1000,
+  "status": "complete",
+  "source": "mock",
+  "sweep": {
+    "base": {
+      "n": 4,
+      "team_size": 2,
+      "ticks": 4,
+      "topology": "complete",
+      "contacts": 2,
+      "memory_ttl": 3,
+      "memory_read": 0.5,
+      "recovery_delay": 5,
+      "monitor_capacity": 1,
+      "monitor_latency": 2,
+      "exposure_probability": 0.25
+    },
+    "axes": {
+      "arm": [
+        "cascade",
+        "isolated_seed",
+        "independent",
+        "common_cause"
+      ]
+    },
+    "seeds": [
+      0,
+      16
+    ]
+  },
+  "plan": {
+    "runs": 8,
+    "planned_calls": 128,
+    "max_output_tokens_per_call": 256,
+    "max_output_tokens_total": 32768,
+    "input_tokens": "unknown until requests are executed",
+    "dollar_cost": "not estimated; select model and pricing first",
+    "interpretation": "restricted-choice integration pilot, not free-form multi-agent validation"
+  },
+  "agent": {
+    "kind": "llm",
+    "model": "mock-always-verify",
+    "settings": {
+      "provider": "openai-responses",
+      "source": "mock",
+      "prompt_version": "evidence-choice-v1",
+      "prompt_sha256": "dc5c5b8aef680b4ca3b53e60b6b9347a2af2256955d9cfc0cc3644904277407b",
+      "schema_sha256": "fc0ef52b4f0b3450e9b445fa74c90a920a7a6057175bf28282e0c83a91fd0e96",
+      "max_output_tokens": 256,
+      "store": false,
+      "retries": 0,
+      "history": "stateless-per-decision",
+      "decoding": "provider-defaults"
+    }
+  },
+  "completed_runs": 8,
+  "max_calls": 128,
+  "calls_attempted": 128,
+  "input_tokens_reported": 0,
+  "output_tokens_reported": 0,
+  "artifacts_sha256": {
+    "49d01726a80b9e1d924f.events.jsonl.gz": "7950b4fba352cfa02d2d67918e356e7189823b3481903b77735d36539f45a3e3",
+    "49d01726a80b9e1d924f.json": "e33d89c4860dfe74fe6804f779654856924628bc9ac4b4a1ca91cd5a03f0f327",
+    "4fd4f774750d8aed8e90.events.jsonl.gz": "165f6f71d08033ccf1ec2f1a0fc0d5831ec5c1695ed39647fc13b37bf14ef429",
+    "4fd4f774750d8aed8e90.json": "5368d7d53ebfbbd84f1f08a5605a957283dff645a540b2b134ab45e4e159ba42",
+    "6ba943037b7e27665e9e.events.jsonl.gz": "79f91f02df9ae6944305ffc1b01b7c08bc5811ee7a602079bb1331d290572bfc",
+    "6ba943037b7e27665e9e.json": "7a4225121063253781dbe468b00029e1b0a1345b836eb28d7c295af4e119b775",
+    "6edc7c5606d61ac7b480.events.jsonl.gz": "64d4ecdd7b7cfddba60d9a3c56d169a69fce1a8420d04786588914024e7aa8e9",
+    "6edc7c5606d61ac7b480.json": "23f3f4884e7af2707d19c8610244a4998c2fa8ee7c8d2858160d179b1fd8dc9a",
+    "98e3297fb84d9f80f883.events.jsonl.gz": "6242a8e6baa498b7bbe0647877d5bfeefcd9482dcab7cb34dfcd4906ee5c3472",
+    "98e3297fb84d9f80f883.json": "138148d81f848f92c431600f3c7546722b148f27bf909fe185fc9c17c18b6708",
+    "a3692624a490d2abdc4e.events.jsonl.gz": "5185d2b63dd760f89716426d0bae4a468e2ab73eaca8b423b2c114c4a656a7fc",
+    "a3692624a490d2abdc4e.json": "f47ed81b92a96cd9187f00feeafe5d7459fb898a0189e627faae3b276a6e516b",
+    "e25eaf488a6570f380b3.events.jsonl.gz": "bd74bf28d46edc10a0a263afbcabd7e8f7841f527f31b7cbdc616d547cb5ea98",
+    "e25eaf488a6570f380b3.json": "1188ab4ab924d76c98b519b0505a9556f86c98e4bc8ed1fbe28641b02e478d3b",
+    "f768d5ea0c45f24782de.events.jsonl.gz": "281d0ba6e7c8d2793d8c2bbb31822bdf6183427719e58ad351d943682673358e",
+    "f768d5ea0c45f24782de.json": "b8a126ba94b446bf73ef2c2f7df7ec0fe71b2931ed1c0cfcdecaf60ea0bff579",
+    "provider.jsonl": "79cde46854a52cbb7eac1c6d9a97b9c85f3d0ec79cfd9bfcf084b55a939505d4",
+    "runs.csv": "7ad62a9df624c4a1cefa6245cdcc00b69035817a6952e7f9b7a930367afa5588"
+  }
+}

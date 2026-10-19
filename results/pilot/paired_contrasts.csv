@@ -1,0 +1,10 @@
+adoption,arm,compute_budget,compute_scaling,contacts,cross_probability,exposure_probability,memory_read,monitor_capacity,monitor_latency,monitor_scaling,n,recovery_delay,team_size,ticks,topology,verification,within_probability,metric,ttl_low,ttl_high,difference,low,high
+0.65,cascade,16,per_agent,2,0.0,0.0625,0.5,1,2,fixed,16,5,4,24,modular,0.15,0.7,affected_fraction,0,6,0.0375,0.015625,0.059375
+0.65,cascade,16,per_agent,2,0.0,0.0625,0.5,1,2,fixed,16,5,4,24,modular,0.15,0.7,final_active_fraction,0,6,0.15,0.125,0.175
+0.65,cascade,16,per_agent,2,0.0,0.0625,0.5,1,2,fixed,16,5,4,24,modular,0.15,0.7,recurrence_count,0,6,17,14,19.8
+0.65,cascade,16,per_agent,2,0.08,0.0625,0.5,1,2,fixed,16,5,4,24,modular,0.15,0.7,affected_fraction,0,6,0.396875,0.225,0.565625
+0.65,cascade,16,per_agent,2,0.08,0.0625,0.5,1,2,fixed,16,5,4,24,modular,0.15,0.7,final_active_fraction,0,6,0.384375,0.234375,0.53125
+0.65,cascade,16,per_agent,2,0.08,0.0625,0.5,1,2,fixed,16,5,4,24,modular,0.15,0.7,recurrence_count,0,6,27.3,18.05,36.45
+0.65,cascade,16,per_agent,2,0.3,0.0625,0.5,1,2,fixed,16,5,4,24,modular,0.15,0.7,affected_fraction,0,6,0.325,0.140625,0.515625
+0.65,cascade,16,per_agent,2,0.3,0.0625,0.5,1,2,fixed,16,5,4,24,modular,0.15,0.7,final_active_fraction,0,6,0.278125,0.146875,0.425
+0.65,cascade,16,per_agent,2,0.3,0.0625,0.5,1,2,fixed,16,5,4,24,modular,0.15,0.7,recurrence_count,0,6,22.75,13,33.55

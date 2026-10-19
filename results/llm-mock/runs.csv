@@ -1,0 +1,9 @@
+run_id,seed,arm,n,decisions,exposed_decisions,verify_choices,adopt_choices,affected_fraction,final_active_fraction,peak_active_fraction,active_agent_ticks,recurrence_count,extinction_tick,right_censored,last_active_tick,wrong_answer_fraction,max_backlog,total_decisions,total_messages
+98e3297fb84d9f80f883,0,cascade,4,16,2,16,0,0.25,0.0,0.25,0,0,1,False,0,0.0,0,16,32
+4fd4f774750d8aed8e90,16,cascade,4,16,3,16,0,0.25,0.0,0.25,0,0,1,False,0,0.0,0,16,32
+49d01726a80b9e1d924f,0,isolated_seed,4,16,0,16,0,0.25,0.0,0.25,0,0,1,False,0,0.0,0,16,0
+f768d5ea0c45f24782de,16,isolated_seed,4,16,0,16,0,0.25,0.0,0.25,0,0,1,False,0,0.0,0,16,0
+e25eaf488a6570f380b3,0,independent,4,16,0,16,0,0.25,0.0,0.25,0,0,1,False,0,0.0,0,16,0
+6edc7c5606d61ac7b480,16,independent,4,16,0,16,0,0.25,0.0,0.25,0,0,1,False,0,0.0,0,16,0
+a3692624a490d2abdc4e,0,common_cause,4,16,0,16,0,1.0,0.0,1.0,0,0,1,False,0,0.0,0,16,0
+6ba943037b7e27665e9e,16,common_cause,4,16,0,16,0,1.0,0.0,1.0,0,0,1,False,0,0.0,0,16,0

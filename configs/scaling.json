@@ -1,0 +1,9 @@
+{
+  "base": {"ticks": 48, "cross_probability": 0.08, "memory_ttl": 6, "compute_budget": 16},
+  "axes": {
+    "n": [16, 32, 64],
+    "compute_scaling": ["fixed", "per_agent"],
+    "monitor_scaling": ["fixed", "proportional"]
+  },
+  "seeds": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+}

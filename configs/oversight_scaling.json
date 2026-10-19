@@ -1,0 +1,5 @@
+{
+  "base": {"ticks": 64, "arrival_probability": 0.3, "reference_population": 8, "review_capacity": 2},
+  "axes": {"n": [4, 8, 16], "capacity_scaling": ["fixed", "proportional"], "arm": ["feedback", "no_retries", "deduplicated"]},
+  "seeds": [0, 1, 2, 3, 4, 5, 6, 7]
+}

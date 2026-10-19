@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mas-failure-lab"
+version = "0.1.0"
+description = "Reproducible experiments on multi-agent cascades, composition and oversight"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+plots = ["matplotlib>=3.8,<4"]
+
+[project.scripts]
+mas-failure-lab = "mas_failure_lab.experiment:main"
+mas-failure-suite = "mas_failure_lab.suite:main"
+mas-llm-pilot = "mas_failure_lab.llm_pilot:main"
+
+[tool.setuptools.packages.find]
+include = ["mas_failure_lab*"]

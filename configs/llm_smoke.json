@@ -1,0 +1,10 @@
+{
+  "base": {
+    "n": 4, "team_size": 2, "ticks": 4, "topology": "complete",
+    "contacts": 2, "memory_ttl": 3, "memory_read": 0.5,
+    "recovery_delay": 5, "monitor_capacity": 1, "monitor_latency": 2,
+    "exposure_probability": 0.25
+  },
+  "axes": {"arm": ["cascade", "isolated_seed", "independent", "common_cause"]},
+  "seeds": [0, 16]
+}

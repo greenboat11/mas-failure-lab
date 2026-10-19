@@ -1,0 +1,8 @@
+{
+  "base": {"n": 8, "ticks": 32, "difficulty": 0.7, "review_capacity": 2, "review_latency": 1, "retry_interval": 2, "deadline": 6, "impatience": 0.6},
+  "axes": {
+    "arrival_probability": [0.1, 0.3, 0.6, 0.9],
+    "arm": ["feedback", "no_retries", "deduplicated", "unbounded"]
+  },
+  "seeds": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+}

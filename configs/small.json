@@ -1,0 +1,21 @@
+{
+  "base": {
+    "n": 16,
+    "team_size": 4,
+    "ticks": 24,
+    "contacts": 2,
+    "verification": 0.15,
+    "adoption": 0.65,
+    "memory_read": 0.5,
+    "recovery_delay": 5,
+    "monitor_capacity": 1,
+    "monitor_latency": 2,
+    "exposure_probability": 0.0625
+  },
+  "axes": {
+    "cross_probability": [0.0, 0.08, 0.3],
+    "memory_ttl": [0, 6],
+    "arm": ["cascade", "isolated_seed", "independent", "common_cause"]
+  },
+  "seeds": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+}
