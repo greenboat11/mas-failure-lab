@@ -11,6 +11,7 @@ from .agents import LLMAgent
 from .experiment import expand, provenance, write_csv
 from .model import canonical, simulate
 from .providers import ResponsesTransport
+from .randomness import seed_plan
 
 
 def plan(spec, max_output_tokens=256):
@@ -53,7 +54,7 @@ def run_pilot(spec, output, *, model, max_calls, max_output_tokens=256, api_key=
         configs, seeds = expand(spec)
         for config in configs:
             for seed in seeds:
-                transport.context = {"config": asdict(config), "seed": seed}
+                transport.context = {"config": asdict(config), "seed": seed, "trial_id": config.trial_id, "random_seeds": seed_plan(config, seed)}
                 result = simulate(config, seed, agent)
                 events = result.pop("events")
                 path = output / result["run_id"]

@@ -1,8 +1,15 @@
 """Discrete-time, synchronous, synthetic claim propagation model."""
+from typing import ClassVar
+from .randomness import RandomConfig, draw, validate_random, seed_plan
+from .serialization import record_config
 from dataclasses import asdict, dataclass
 import hashlib
 import json
 import math
+
+from .serialization import canonical, record_config
+from .randomness import uniform
+from .events import ExplicitEventLog
 
 from .agents import Agent, Decision, Exposure, Observation, ScriptedAgent
 
@@ -11,18 +18,9 @@ FALSE = 9
 ARMS = ("cascade", "isolated_seed", "independent", "common_cause")
 
 
-def canonical(value) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
-
-
-def uniform(seed: int, *key) -> float:
-    """Keyed random numbers: independent of iteration order and unused draws."""
-    digest = hashlib.sha256(canonical([seed, *key]).encode()).digest()
-    return int.from_bytes(digest[:8], "big") / 2**64
-
-
 @dataclass(frozen=True)
-class Config:
+class Config(RandomConfig):
+    legacy_fields: ClassVar[tuple] = ('n', 'team_size', 'ticks', 'topology', 'within_probability', 'cross_probability', 'contacts', 'adoption', 'verification', 'memory_read', 'memory_ttl', 'recovery_delay', 'monitor_capacity', 'monitor_scaling', 'monitor_latency', 'compute_scaling', 'compute_budget', 'exposure_probability', 'arm')
     n: int = 16
     team_size: int = 4
     ticks: int = 24
@@ -42,8 +40,16 @@ class Config:
     compute_budget: int = 16
     exposure_probability: float = 0.0625
     arm: str = "cascade"
+    baseline: str = "asymmetric_contamination"
+    corrective_peer: float = 0.0
+    corrective_write: float = 0.0
+    artifact_cleanup: float = 0.0
+    scaling_treatment: str = "legacy"
+    expected_degree: float = 3.0
+    communication_budget: int = 16
 
     def __post_init__(self):
+        validate_random(self)
         for name in ("n", "team_size", "ticks", "recovery_delay", "compute_budget"):
             value = getattr(self, name)
             if type(value) is not int or value < 1:
@@ -56,7 +62,23 @@ class Config:
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 1:
                 raise ValueError(f"{name} must be a probability")
-        if self.arm not in ARMS or self.topology not in ("modular", "ring", "complete"):
+        for name in ("corrective_peer", "corrective_write", "artifact_cleanup"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
+                raise ValueError(f"invalid {name}")
+        if self.baseline not in ("asymmetric_contamination", "corrective"):
+            raise ValueError("unknown baseline")
+        if self.baseline == "asymmetric_contamination" and any((self.corrective_peer, self.corrective_write, self.artifact_cleanup)):
+            raise ValueError("enable baseline=corrective for correction channels")
+        if self.scaling_treatment not in ("legacy", "edge_probability", "expected_degree", "communication_budget"):
+            raise ValueError("unknown scaling treatment")
+        if type(self.communication_budget) is not int or self.communication_budget < 0:
+            raise ValueError("communication_budget must be a nonnegative integer")
+        if isinstance(self.expected_degree, bool) or not isinstance(self.expected_degree, (int, float)) or not math.isfinite(self.expected_degree) or self.expected_degree < 0:
+            raise ValueError("invalid expected degree")
+        if self.scaling_treatment == "expected_degree" and (self.topology != "erdos_renyi" or self.expected_degree > self.n - 1):
+            raise ValueError("expected_degree scaling requires feasible erdos_renyi degree")
+        if self.arm not in ARMS or self.topology not in ("modular", "ring", "complete", "erdos_renyi"):
             raise ValueError("unknown arm or topology")
         if self.compute_scaling not in ("fixed", "per_agent") or self.monitor_scaling not in ("fixed", "proportional"):
             raise ValueError("unknown scaling treatment")
@@ -67,9 +89,11 @@ def graph(config: Config, seed: int) -> dict:
     for i in range(config.n):
         for j in range(i + 1, config.n):
             p = config.within_probability if i // config.team_size == j // config.team_size else config.cross_probability
+            if config.topology == "erdos_renyi":
+                p = config.expected_degree / (config.n - 1) if config.scaling_treatment == "expected_degree" else config.cross_probability
             connected = (config.topology == "complete" or
                          (config.topology == "ring" and (j == i + 1 or (i == 0 and j == config.n - 1))) or
-                         (config.topology == "modular" and uniform(seed, "graph", i, j) < p))
+                         (config.topology in ("modular", "erdos_renyi") and draw(config, seed, "graph", i, j) < p))
             if connected:
                 edges.append([i, j])
     if config.arm != "cascade":
@@ -81,26 +105,43 @@ def graph(config: Config, seed: int) -> dict:
     }
 
 
+def graph_statistics(config, relationships):
+    edges = relationships["communication_edges"]
+    degrees = [0] * config.n
+    neighbors = [set() for _ in degrees]
+    for i, j in edges:
+        degrees[i] += 1
+        degrees[j] += 1
+        neighbors[i].add(j)
+        neighbors[j].add(i)
+    remaining, components = set(range(config.n)), 0
+    while remaining:
+        components += 1
+        frontier = [remaining.pop()]
+        while frontier:
+            for neighbor in neighbors[frontier.pop()] & remaining:
+                remaining.remove(neighbor)
+                frontier.append(neighbor)
+    return dict(graph_edges=len(edges), graph_mean_degree=sum(degrees) / config.n,
+                graph_max_degree=max(degrees), graph_isolated=sum(d == 0 for d in degrees),
+                graph_components=components, graph_density=2 * len(edges) / (config.n * (config.n - 1)) if config.n > 1 else 0.0)
+
+
 def simulate(config: Config, seed: int, agent: Agent | None = None) -> dict:
     if type(seed) is not int or seed < 0:
         raise ValueError("seed must be a nonnegative integer")
     agent = agent or ScriptedAgent(config.verification, config.adoption)
     relationships = graph(config, seed)
-    run_id = hashlib.sha256(canonical({"config": asdict(config), "seed": seed, "agent": agent.metadata()}).encode()).hexdigest()[:20]
-    events: list[dict] = []
-
-    def emit(kind, tick, actor=None, parents=(), roots=(), **data):
-        event_id = len(events)
-        events.append(dict(schema_version=1, run_id=run_id, event_id=event_id, tick=tick,
-                           kind=kind, actor=actor, parents=list(parents), roots=sorted(set(roots)), **data))
-        return event_id
+    run_id = hashlib.sha256(canonical({"config": record_config(config), "seed": seed, "agent": agent.metadata()}).encode()).hexdigest()[:20]
+    trace = ExplicitEventLog(run_id)
+    events, emit = trace.events, trace.emit
 
     def root(kind, tick, **data):
         event_id = emit(kind, tick, **data)
         events[event_id]["roots"] = [event_id]
         return event_id
 
-    emit("run_started", -1, config=asdict(config), seed=seed, agent=agent.metadata(), relationships=relationships)
+    emit("run_started", -1, config=record_config(config), seed=seed, agent=agent.metadata(), relationships=relationships)
     evidence = emit("document", -1, artifact="D0", value=TRUTH, text=Observation(0, 0, TRUTH, ()).document)
     state: list[int | None] = [None] * config.n  # last false-state event, not a probability
     onset = [0] * config.n
@@ -127,10 +168,10 @@ def simulate(config: Config, seed: int, agent: Agent | None = None) -> dict:
         infect(0, 0, source, "seed")
     else:
         # One-shot exposures; same marginal probability, different dependence.
-        shared = uniform(seed, "exogenous", 0) < config.exposure_probability
+        shared = draw(config, seed, "exogenous", 0) < config.exposure_probability
         source = root("shared_shock", 0, value=FALSE) if config.arm == "common_cause" and shared else None
         for i in range(config.n):
-            exposed = shared if config.arm == "common_cause" else uniform(seed, "exogenous", i) < config.exposure_probability
+            exposed = shared if config.arm == "common_cause" else draw(config, seed, "exogenous", i) < config.exposure_probability
             if exposed:
                 parent = source if source is not None else root("independent_error", 0, actor=i, value=FALSE)
                 infect(i, 0, parent, "exogenous")
@@ -138,6 +179,8 @@ def simulate(config: Config, seed: int, agent: Agent | None = None) -> dict:
     series = []
     def snapshot(tick, decisions=0, messages=0):
         series.append(dict(tick=tick, active=sum(s is not None for s in state), affected=len(ever), backlog=len(queue), decisions=decisions, messages=messages))
+        if config.baseline == "corrective":
+            series[-1]["contaminated_artifacts"] = sum(events[item[0]]["value"] != TRUTH for item in memory.values())
         emit("snapshot", tick, **{k: v for k, v in series[-1].items() if k != "tick"})
 
     snapshot(0)
@@ -146,6 +189,9 @@ def simulate(config: Config, seed: int, agent: Agent | None = None) -> dict:
         for team, (event_id, expiry) in list(memory.items()):
             if expiry <= tick:
                 emit("artifact_expired", tick, parents=[event_id], team=team)
+                del memory[team]
+            elif config.artifact_cleanup > 0 and events[event_id]["value"] != TRUTH and draw(config, seed, "cleanup", tick, team) < config.artifact_cleanup:
+                emit("artifact_cleanup", tick, parents=[event_id, evidence], team=team)
                 del memory[team]
         capacity = config.monitor_capacity * (math.ceil(config.n / config.team_size) if config.monitor_scaling == "proportional" else 1)
         serviced = 0
@@ -164,13 +210,20 @@ def simulate(config: Config, seed: int, agent: Agent | None = None) -> dict:
                 state[i] = None
         previous = state.copy()
         budget = config.n if config.compute_scaling == "per_agent" else min(config.n, config.compute_budget)
-        active_agents = sorted(range(config.n), key=lambda i: (uniform(seed, "scheduler", tick, i), i))[:budget]
+        active_agents = sorted(range(config.n), key=lambda i: (draw(config, seed, "scheduler", tick, i), i))[:budget]
         pending: list[tuple[int, Observation, Decision, int]] = []
         message_count = 0
+        contacts_by_agent = {i: sorted(neighbors[i], key=lambda j: (draw(config, seed, "contact", tick, i, j), j))[:config.contacts] for i in active_agents}
+        allowed_pairs = None
+        if config.scaling_treatment == "communication_budget":
+            pairs = [(i, j) for i in active_agents for j in contacts_by_agent[i]]
+            allowed_pairs = set(sorted(pairs, key=lambda pair: (draw(config, seed, "message_budget", tick, *pair), pair))[:config.communication_budget])
         for i in active_agents:
             exposures = []
-            contacts = sorted(neighbors[i], key=lambda j: (uniform(seed, "contact", tick, i, j), j))[:config.contacts]
+            contacts = contacts_by_agent[i]
             for j in contacts:
+                if allowed_pairs is not None and (i, j) not in allowed_pairs:
+                    continue
                 # Correct peer answers are logged too; this baseline only copies deviations.
                 parent = previous[j] if previous[j] is not None else evidence
                 value = FALSE if previous[j] is not None else TRUTH
@@ -178,13 +231,17 @@ def simulate(config: Config, seed: int, agent: Agent | None = None) -> dict:
                 message_count += 1
                 if value != TRUTH:
                     exposures.append(Exposure(event_id, value, "communication"))
+                elif previous[i] is not None and config.corrective_peer > 0 and draw(config, seed, "corrective_peer", tick, i, j) < config.corrective_peer:
+                    exposures.append(Exposure(event_id, value, "communication"))
             team = i // config.team_size
-            if team in memory and uniform(seed, "read", tick, i) < config.memory_read:
+            if team in memory and draw(config, seed, "read", tick, i) < config.memory_read:
                 parent = memory[team][0]
-                event_id = emit("artifact_read", tick, i, [parent], events[parent]["roots"], team=team, value=FALSE)
-                exposures.append(Exposure(event_id, FALSE, "artifact"))
+                value = events[parent]["value"]
+                event_id = emit("artifact_read", tick, i, [parent], events[parent]["roots"], team=team, value=value)
+                if value != TRUTH or previous[i] is not None:
+                    exposures.append(Exposure(event_id, value, "artifact"))
             obs = Observation(i, tick, FALSE if previous[i] is not None else TRUTH, tuple(exposures))
-            draws = tuple(uniform(seed, "decision", tick, i, k) for k in range(3))
+            draws = tuple(draw(config, seed, "decision", tick, i, k) for k in range(3))
             decision = agent.decide(obs, draws)
             if not isinstance(decision, Decision) or type(decision.verify) is not bool:
                 raise ValueError("agent must return a valid Decision")
@@ -200,7 +257,11 @@ def simulate(config: Config, seed: int, agent: Agent | None = None) -> dict:
                 emit("verification", tick, i, [event_id, evidence] + ([state[i]] if state[i] is not None else []), was_deviating=state[i] is not None)
                 state[i] = None
             elif decision.adopt_event is not None:
-                infect(i, tick, decision.adopt_event, "adoption", event_id)
+                if events[decision.adopt_event]["value"] == TRUTH:
+                    emit("peer_or_artifact_correction", tick, i, [decision.adopt_event, event_id] + ([state[i]] if state[i] is not None else []), was_deviating=state[i] is not None)
+                    state[i] = None
+                else:
+                    infect(i, tick, decision.adopt_event, "adoption", event_id)
             parent = state[i] if state[i] is not None else evidence
             emit("answer", tick, i, [parent, event_id], events[parent]["roots"],
                  answer={"sample_count": FALSE if state[i] is not None else TRUTH, "citations": [parent]},
@@ -211,6 +272,9 @@ def simulate(config: Config, seed: int, agent: Agent | None = None) -> dict:
                 parent = state[i]
                 event_id = emit("artifact_write", tick, i, [parent], events[parent]["roots"], team=i // config.team_size, value=FALSE, expiry=tick + config.memory_ttl)
                 memory[i // config.team_size] = (event_id, tick + config.memory_ttl)
+            elif state[i] is None and config.arm == "cascade" and config.memory_ttl > 0 and config.corrective_write > 0 and draw(config, seed, "corrective_write", tick, i) < config.corrective_write:
+                event_id = emit("artifact_write", tick, i, [evidence], team=i // config.team_size, value=TRUTH, expiry=tick + config.memory_ttl)
+                memory[i // config.team_size] = (event_id, tick + config.memory_ttl)
         for i in range(config.n):
             if state[i] is not None and (i not in queue or queue[i][1] != state[i]):
                 queue[i] = (tick + config.monitor_latency, state[i])
@@ -220,11 +284,13 @@ def simulate(config: Config, seed: int, agent: Agent | None = None) -> dict:
     # Extinction requires both no active deviations and no live contaminated artifacts.
     extinction = None
     active_ticks = [s["tick"] for s in series if s["active"]]
-    if not any(s is not None for s in state) and not memory:
+    if not any(s is not None for s in state) and not any(events[item[0]]["value"] != TRUTH for item in memory.values()):
         # Earliest suffix with no activity; artifact expiry may occur later than last activity.
         last_activity = max(active_ticks, default=-1)
         last_expiry = max((e["tick"] for e in events if e["kind"] == "artifact_expired"), default=0)
         extinction = max(last_activity + 1, last_expiry)
+        if config.baseline == "corrective":
+            extinction = max((s["tick"] for s in series if s["active"] or s.get("contaminated_artifacts", 0)), default=-1) + 1
     answers = [e for e in events if e["kind"] == "answer"]
     offspring = {}
     for event in events:
@@ -243,5 +309,5 @@ def simulate(config: Config, seed: int, agent: Agent | None = None) -> dict:
                    max_backlog=max(s["backlog"] for s in series),
                    total_decisions=sum(s["decisions"] for s in series), total_messages=sum(s["messages"] for s in series),
                    attributable_offspring=offspring)
-    return dict(run_id=run_id, config=asdict(config), seed=seed, agent=agent.metadata(), relationships=relationships,
+    return dict(run_id=run_id, config=record_config(config), seed=seed, agent=agent.metadata(), relationships=relationships,
                 metrics=metrics, series=series, events=events)

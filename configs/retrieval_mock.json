@@ -1,0 +1,5 @@
+{
+  "base": {"n": 4, "turns": 3, "retrieval_credits": 2, "retrieval_cost": 1, "utility_cost_per_credit": 0.1, "random_scheme": "split-v2", "topology_seed": 7, "task_seed": 11, "policy_seed": 19},
+  "seeds": [0],
+  "trials": ["trial-0", "trial-1", "trial-2"]
+}

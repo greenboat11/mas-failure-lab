@@ -1,0 +1,5 @@
+{
+  "base": {"n": 8, "ticks": 8, "baseline": "corrective", "topology": "erdos_renyi", "cross_probability": 0.4, "random_scheme": "split-v2"},
+  "axes": {"corrective_peer": [0.0, 1.0], "corrective_write": [0.0, 0.7], "artifact_cleanup": [0.0, 0.5]},
+  "seeds": [0, 1, 2]
+}

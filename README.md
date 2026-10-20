@@ -10,6 +10,12 @@
 | 2. Composition | Can locally permitted steps jointly violate global policy? | Participant removal, handoff cut, sanitization, visible-label and lineage authorization | [864 runs](results/composition-pilot/REPORT.md) |
 | 3. Oversight | How do retries and finite review capacity change outcomes? | No retries, duplicate suppression, unbounded review; fixed/proportional budget config | [192 runs](results/oversight-pilot/REPORT.md) |
 
+**Start here: [Research overview, hypotheses, and validation plan](docs/RESEARCH_OVERVIEW.md).** Analytical checks: [benchmarks](docs/BENCHMARKS.md).
+
+The staged extensions add corrective channels, matched scaling, alternative capability routes, uncertain oversight and bounded evidence retrieval. See [extension controls and compatibility](docs/EXTENSIONS.md), [retrieval task](docs/EVIDENCE_RETRIEVAL.md), and [citation, dataset releases and pending license proposal](docs/RESEARCH_PACKAGING.md). Historical pilot links below remain unchanged.
+
+[Exact next-experiment commands](docs/NEXT_EXPERIMENTS.md) · [Staged validation record](docs/VALIDATION.md).
+
 ## Run locally
 
 Python 3.11+. Simulation and tests require only the standard library. Plotting uses optional Matplotlib.

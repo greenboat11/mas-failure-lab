@@ -8,13 +8,17 @@ import json
 from pathlib import Path
 
 from . import composition, oversight
-from .experiment import interval, provenance, write_csv
+from .statistics import interval
+from .provenance import provenance
+from .runner import write_csv, write_run
+from .randomness import seed_plan
 from .model import canonical
+from .diagnostics import composition_metrics, oversight_metrics
 
 ENGINES = {"composition": (composition.CompositionConfig, composition.simulate,
-                            ("global_violation", "locally_compliant_violation", "publication_blocked")),
+                            ("global_violation", "locally_compliant_violation", "publication_blocked", "authorized_task_completion")),
            "oversight": (oversight.OversightConfig, oversight.simulate,
-                         ("unsafe_fraction", "final_backlog", "pending_at_horizon", "wasted_reviews"))}
+                         ("unsafe_fraction", "final_backlog", "pending_at_horizon", "wasted_reviews", "original_review_demand", "retry_demand", "stale_requests"))}
 
 
 def expand(experiment, spec):
@@ -45,23 +49,26 @@ def run_sweep(experiment, spec, output, plots=True):
     def save():
         (output / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     save()
+    manifest["seed_plans"] = [{"config": asdict(c), "base_seed": s, **seed_plan(c, s)} for c in configs for s in seeds]
     rows, summaries, trajectories = [], [], []
     try:
         for config in configs:
             group = []
             for seed in seeds:
                 result = ENGINES[experiment][1](config, seed)
+                additions = composition_metrics(result) if experiment == "composition" else oversight_metrics(config, result)
+                for key, value in additions.items():
+                    result["metrics"].setdefault(key, value)
                 path = output / "runs" / result["run_id"]
-                with path.with_suffix(".events.jsonl.gz").open("wb") as raw:
-                    with gzip.GzipFile(fileobj=raw, mode="wb", filename="", mtime=0) as stream:
-                        stream.write(("\n".join(canonical(event) for event in result.pop("events")) + "\n").encode())
-                path.with_suffix(".json").write_text(canonical(result) + "\n", encoding="utf-8")
+                write_run(path, result)
                 row = {"run_id": result["run_id"], "seed": seed, **asdict(config), **result["metrics"]}
                 rows.append(row)
                 group.append(row)
                 trajectories.append(result)
                 manifest["completed_runs"] += 1
             summary = asdict(config) | {"replicates": len(seeds)}
+            if experiment == "oversight":
+                summary.update({key: group[0][key] for key in ("rho_0", "rho_0_status", "nominal_offered_review_load")})
             for metric in ENGINES[experiment][2]:
                 mean, low, high = interval([float(row[metric]) for row in group])
                 summary.update({metric + "_mean": mean, metric + "_low": low, metric + "_high": high})
@@ -111,9 +118,14 @@ def plot(experiment, summaries, trajectories, output):
             x = [r[x_key] for r in subset]
             ax.plot(x, [r[metric + "_mean"] for r in subset], "o-", label=label)
             ax.fill_between(x, [r[metric + "_low"] for r in subset], [r[metric + "_high"] for r in subset], alpha=0.15)
+            if len(x) == 1:
+                mean = subset[0][metric + "_mean"]
+                ax.errorbar(x, [mean], yerr=[[max(0, mean - subset[0][metric + "_low"])], [max(0, subset[0][metric + "_high"] - mean)]], fmt="none", capsize=4, color=ax.lines[-1].get_color())
         ax.set(xlabel=x_key.replace("_", " "), ylabel=ylabel,
                title=f"{experiment.title()}: " + (", ".join(f"{k}={v}" for k, v in key) or "scripted pilot") + "\nMeans and 95% run-bootstrap intervals")
         ax.legend()
+        if experiment == "composition":
+            ax.set_ylim(-0.03, 1.03)
         ax.grid(alpha=0.2)
         for extension in ("png", "svg"):
             fig.savefig(output / f"outcomes_{index}.{extension}", dpi=150)
@@ -136,18 +148,22 @@ def plot(experiment, summaries, trajectories, output):
 
 
 def write_report(experiment, summaries, manifest, output):
+    shown = {"control", "authorization", "relays", "provenance_retention"} if experiment == "composition" else {"arm", "arrival_probability", "review_capacity", "capacity_scaling"}
+    context_keys = [key for key in asdict(ENGINES[experiment][0]()) if key not in shown and len({row[key] for row in summaries}) > 1]
+    treatment = lambda row: "; ".join(f"{key}={row[key]}" for key in context_keys) or "fixed"
     lines = [f"# {experiment.title()} scripted pilot", "", f"Completed {manifest['completed_runs']} runs. No LLM or external tool calls.", "",
              "These are finite synthetic experiments under explicit rules, not validated LLM behavior or evidence of phase transitions. Intervals use 1,000 run-level bootstrap resamples; repeated seeds are paired across treatments, not extra independent evidence.", ""]
+    lines += ["Interpretation: workflow gates, retries, deadlines and reviewer behavior are programmed mechanisms. The tables describe synthetic outcomes under those rules; empirical agent validation remains pending.", ""]
     if experiment == "composition":
-        lines += ["| Control | Authorization | Relays | Retention | Disclosure mean | 95% interval |", "|---|---|---:|---:|---:|---|"]
+        lines += ["| Treatment | Control | Authorization | Relays | Retention | Disclosure mean | Authorized completion | 95% interval |", "|---|---|---|---:|---:|---:|---:|---|"]
         for r in summaries:
-            lines.append(f"| {r['control']} | {r['authorization']} | {r['relays']} | {r['provenance_retention']} | {r['global_violation_mean']:.3f} | [{r['global_violation_low']:.3f}, {r['global_violation_high']:.3f}] |")
-        lines += ["", "Minimum violating coalitions and leave-one-out controls are evaluated exactly for this fixed scripted workflow, not for arbitrary agent organizations. Visible labels can be dropped while the environment retains true ancestry. The lineage gate conservatively blocks restricted descendants, including sanitized descendants; redaction is not implicit declassification."]
+            lines.append(f"| {treatment(r)} | {r['control']} | {r['authorization']} | {r['relays']} | {r['provenance_retention']} | {r['global_violation_mean']:.3f} | {r['authorized_task_completion_mean']:.3f} | [{r['global_violation_low']:.3f}, {r['global_violation_high']:.3f}] |")
+        lines += ["", "Minimum violating coalitions and leave-one-out controls are evaluated against each configured scripted workflow and its publication predicate, not for arbitrary agent organizations. Visible labels can be dropped while the environment retains true ancestry. The lineage gate conservatively blocks restricted descendants, including sanitized descendants; redaction is not implicit declassification."]
     else:
-        lines += ["| Arm | Arrival probability | Capacity | Scaling | Unsafe fraction | Final backlog | Pending tasks |", "|---|---:|---:|---|---:|---:|---:|"]
+        lines += ["| Treatment | Arm | Arrival probability | Capacity | Scaling | rho_0 | Unsafe fraction | Final backlog | Pending tasks |", "|---|---|---:|---:|---|---|---:|---:|---:|"]
         for r in summaries:
-            lines.append(f"| {r['arm']} | {r['arrival_probability']} | {r['review_capacity']} | {r['capacity_scaling']} | {r['unsafe_fraction_mean']:.3f} | {r['final_backlog_mean']:.2f} | {r['pending_at_horizon_mean']:.2f} |")
-        lines += ["", "Backlog includes stale duplicate review requests; pending tasks are distinct unresolved jobs. Completed-review delay excludes unresolved/abandoned jobs and is not an unbiased estimate of all-job waiting time. Arrivals continue through the last tick; no drain period is applied. Retry feedback is imposed, not inferred as an emergent LLM strategy. Unbounded review still respects configured latency."]
+            lines.append(f"| {treatment(r)} | {r['arm']} | {r['arrival_probability']} | {r['review_capacity']} | {r['capacity_scaling']} | {r['rho_0'] if r['rho_0'] is not None else r['rho_0_status']} | {r['unsafe_fraction_mean']:.3f} | {r['final_backlog_mean']:.2f} | {r['pending_at_horizon_mean']:.2f} |")
+        lines += ["", "Original offered load excludes retry demand and estimation errors. Original requests, retry demand, stale requests and unique pending tasks are separate columns in the CSV outputs. Backlog includes stale duplicate review requests; pending tasks are distinct unresolved jobs. Completed-review delay excludes unresolved/abandoned jobs and is not an unbiased estimate of all-job waiting time. Arrivals continue through the last tick; no drain period is applied. Retry feedback is imposed, not inferred as an emergent LLM strategy. Unbounded review still respects configured latency."]
     lines += ["", "Full configurations and bootstrap intervals: summary.csv. Seed-level outcomes: runs.csv. Parent-linked traces: runs/*.events.jsonl.gz. See the experiment protocol under docs/ for update order, denominators and limitations."]
     (output / "REPORT.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 

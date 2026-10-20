@@ -1,0 +1,10 @@
+{
+  "cff-version": "1.2.0",
+  "message": "If you use this framework, cite this software and record the exact commit and dataset version used.",
+  "type": "software",
+  "title": "MAS Failure Lab",
+  "authors": [{"name": "greenboat11"}],
+  "repository-code": "https://github.com/greenboat11/mas-failure-lab",
+  "url": "https://github.com/greenboat11/mas-failure-lab",
+  "abstract": "Synthetic experimental framework for multi-agent propagation, compositional policy violations, and oversight saturation."
+}

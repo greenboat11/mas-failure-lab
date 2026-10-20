@@ -1,0 +1,5 @@
+{
+  "base": {"ticks": 8, "topology": "erdos_renyi", "cross_probability": 0.4, "expected_degree": 3, "contacts": 2, "communication_budget": 6, "random_scheme": "split-v2"},
+  "axes": {"n": [4, 8, 16], "scaling_treatment": ["edge_probability", "expected_degree", "communication_budget"]},
+  "seeds": [0, 1, 2, 3]
+}

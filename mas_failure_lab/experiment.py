@@ -14,15 +14,13 @@ import subprocess
 import sys
 
 from . import __version__
-from .model import ARMS, Config, canonical, simulate
+from .statistics import interval
+from .provenance import provenance
+from .runner import write_csv, write_run
+from .randomness import seed_plan
+from .model import ARMS, Config, canonical, simulate, graph_statistics
 
-METRICS = ("affected_fraction", "final_active_fraction", "wrong_answer_fraction", "recurrence_count", "max_backlog", "right_censored")
-
-
-def interval(values, seed=0, repetitions=1000):
-    rng = random.Random(seed)
-    samples = sorted(statistics.mean(rng.choices(values, k=len(values))) for _ in range(repetitions))
-    return statistics.mean(values), samples[int(0.025 * repetitions)], samples[int(0.975 * repetitions)]
+METRICS = ("affected_fraction", "final_active_fraction", "wrong_answer_fraction", "recurrence_count", "max_backlog", "right_censored", "graph_mean_degree", "graph_max_degree", "graph_edges", "graph_density", "graph_components", "graph_isolated", "total_messages")
 
 
 def expand(spec):
@@ -39,27 +37,6 @@ def expand(spec):
     return configs, seeds
 
 
-def write_csv(path, rows):
-    with path.open("w", newline="", encoding="utf-8") as stream:
-        writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-def provenance():
-    root = Path(__file__).resolve().parent.parent
-    hashes = {str(p.relative_to(root)).replace("\\", "/"): hashlib.sha256(p.read_bytes()).hexdigest()
-              for folder in ("mas_failure_lab", "tests", "configs") for p in sorted((root / folder).rglob("*"))
-              if p.is_file() and "__pycache__" not in p.parts}
-    try:
-        revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, stderr=subprocess.DEVNULL, text=True).strip()
-        dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=root, stderr=subprocess.DEVNULL, text=True).strip())
-    except (OSError, subprocess.CalledProcessError):
-        revision, dirty = None, None
-    return dict(version=__version__, python=sys.version, platform=platform.platform(), git_revision=revision,
-                git_dirty=dirty, source_sha256=hashes, random_scheme="sha256-keyed-v1", bootstrap_repetitions=1000)
-
-
 def run_sweep(spec, output: Path, *, plots=True):
     configs, seeds = expand(spec)
     if output.exists() and any(output.iterdir()):
@@ -68,18 +45,15 @@ def run_sweep(spec, output: Path, *, plots=True):
     (output / "runs").mkdir()
     manifest = provenance() | {"sweep": spec, "run_count": len(configs) * len(seeds), "status": "running"}
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    manifest["seed_plans"] = [{"config": asdict(c), "base_seed": s, **seed_plan(c, s)} for c in configs for s in seeds]
     rows, summary, trajectories = [], [], []
     for config in configs:
         group = []
         for seed in seeds:
             result = simulate(config, seed)
+            result["metrics"].update(graph_statistics(config, result["relationships"]))
             path = output / "runs" / result["run_id"]
-            # mtime=0 and empty gzip filename make log bytes reproducible too.
-            with path.with_suffix(".events.jsonl.gz").open("wb") as raw:
-                with gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as stream:
-                    for event in result.pop("events"):
-                        stream.write((canonical(event) + "\n").encode())
-            path.with_suffix(".json").write_text(canonical(result) + "\n", encoding="utf-8")
+            write_run(path, result)
             metrics = {k: v for k, v in result["metrics"].items() if k != "attributable_offspring"}
             rows.append({"run_id": result["run_id"], "seed": seed, **asdict(config), **metrics})
             group.append(result["metrics"])
@@ -140,6 +114,8 @@ def plot(output, summary, runs):
                 y = [r[metric + "_mean"] for r in selected]
                 ax.plot(x, y, "o-", label=arm)
                 ax.fill_between(x, [r[metric + "_low"] for r in selected], [r[metric + "_high"] for r in selected], alpha=0.12)
+                if len(x) == 1:
+                    ax.errorbar(x, y, yerr=[[max(0, y[0] - selected[0][metric + "_low"])], [max(0, selected[0][metric + "_high"] - y[0])]], fmt="none", capsize=4, color=ax.lines[-1].get_color())
             ax.set(xlabel="Cross-team edge probability (cascade arm)", ylabel=label, ylim=(-0.03, 1.03))
             ax.grid(alpha=0.2)
         axes[0].legend(fontsize=8)
@@ -163,14 +139,19 @@ def plot(output, summary, runs):
 
 
 def report(output, summary, contrasts, manifest):
+    context_keys = [key for key in asdict(Config()) if key not in ("arm", "cross_probability", "memory_ttl") and len({row[key] for row in summary}) > 1]
+    treatment = lambda row: "; ".join(f"{key}={row[key]}" for key in context_keys) or "fixed"
     lines = ["# Experiment 1 pilot", "", f"Completed {manifest['run_count']} scripted simulations. No LLM calls were made.", "",
              "Intervals are percentile bootstrap intervals over runs (1,000 resamples); small samples and boundary outcomes can produce misleadingly narrow intervals. These are descriptive, unadjusted pilot comparisons.", "",
-             "| Arm | Cross probability | Artifact TTL | Ever affected mean | Final active mean | Unresolved at horizon |", "|---|---:|---:|---:|---:|---:|"]
+             "Interpretation: propagation, perfect verification and recovery are programmed rules. These contrasts describe sensitivity within the model; they are not measurements of LLM behavior.", "",
+             "| Treatment | Arm | Cross probability | Artifact TTL | Ever affected mean | Final active mean | Unresolved at horizon |", "|---|---|---:|---:|---:|---:|---:|"]
     for row in summary:
-        lines.append(f"| {row['arm']} | {row['cross_probability']} | {row['memory_ttl']} | {row['affected_fraction_mean']:.3f} | {row['final_active_fraction_mean']:.3f} | {row['right_censored_mean']:.3f} |")
+        lines.append(f"| {treatment(row)} | {row['arm']} | {row['cross_probability']} | {row['memory_ttl']} | {row['affected_fraction_mean']:.3f} | {row['final_active_fraction_mean']:.3f} | {row['right_censored_mean']:.3f} |")
     lines += ["", "Full configurations and intervals are in summary.csv; seed-level outcomes are in runs.csv.", "", "## Paired artifact-persistence contrasts", "", "Same seeds, graph draws, scheduler and decision draws; differences are longest TTL minus shortest TTL. Controls have both endogenous channels disabled, so their cross/TTL duplicates are deliberate invariance checks.", "", "| Cross probability | Metric | Difference | 95% interval |", "|---:|---|---:|---|"]
+    graph_note = ["", "Realized graph edges, density, mean degree, isolated vertices, components and total executed messages are recorded in runs.csv and summary.csv. Fixed communication budgets are ceilings; sparse graphs can leave unused opportunities.", ""]
     for c in contrasts:
         lines.append(f"| {c['cross_probability']} | {c['metric']} | {c['difference']:.3f} | [{c['low']:.3f}, {c['high']:.3f}] |")
+    lines += graph_note
     lines += ["", "## Interpretation limits", "", "These outcomes describe finite-horizon failure regimes under imposed rules. They do not establish a phase transition, criticality, real-world agent escape rates, or LLM behavior. Artifact persistence and recovery are model assumptions. Extinction is right-censored when active deviations or contaminated memory remain. Common-cause and independent arms have matched marginal exposure probabilities but different dependence; they are not exposure-count-matched to the single-seed arms.", "", "A phase-transition claim would need a size series, longer horizons, finite-size analysis, alternative transition rules and nulls. Independent restarts in this Cartesian sweep are not a hysteresis experiment. LLM calibration, held-out topologies and stronger statistical power remain future work."]
     (output / "REPORT.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 

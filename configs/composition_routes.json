@@ -1,0 +1,5 @@
+{
+  "base": {"workflow_mode": "alternatives", "relays": 1, "redundant_transforms": 2, "redundant_publishers": 1, "relay_bypass": true, "sanitizing_routes": 1, "random_scheme": "split-v2"},
+  "axes": {"authorization": ["local", "lineage", "global_policy"], "control": ["intact", "remove_transform", "sanitize"]},
+  "seeds": [0, 1]
+}

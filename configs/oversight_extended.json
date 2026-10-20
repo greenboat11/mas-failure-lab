@@ -1,0 +1,5 @@
+{
+  "base": {"baseline": "extended", "n": 8, "ticks": 12, "review_capacity": 2, "retry_mode": "agent", "retry_probability": 0.5, "random_scheme": "split-v2"},
+  "axes": {"review_accuracy": [1.0, 0.8], "review_sensitivity": [1.0, 0.7], "arm": ["feedback", "no_retries", "deduplicated", "unbounded"]},
+  "seeds": [0, 1, 2]
+}

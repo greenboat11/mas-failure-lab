@@ -6,6 +6,8 @@
 | Experiment 2 | `composition.py` | Complementary capability workflow, canary checks, coalition audits |
 | Experiment 3 | `oversight.py` | Task arrivals, review queue, retries, deadlines |
 | Shared support | `common.py`, `suite.py`, utilities in `experiment.py` | Event envelopes, action-policy boundary, sweep outputs, intervals, provenance |
+| Shared primitives | `events.py`, `randomness.py`, `statistics.py`, `serialization.py`, `provenance.py`, `runner.py` | Versioned keys, compatibility records, event envelopes and artifact writing |
+| Bounded retrieval | `retrieval.py` | Priced evidence access, language claims, truth checks, repeated trials and offline replay |
 | LLM preparation | `providers.py`, `llm_pilot.py` | Audited optional Responses transport, exact offline replay, opt-in paid execution |
 | Research configuration | `configs/`, `docs/` | Explicit treatments, controls, assumptions and roadmap |
 
